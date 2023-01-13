@@ -118,7 +118,7 @@ class Warpaffine(object):
         self.block_size = (32, 32,1)
         self.grid_size = ((dst_size[0] + 31) // 32, (dst_size[1] + 31) // 32, 1)
         
-        self.pdst_host = cuda.register_host_memory(np.ones((dst_size[0],dst_size[1],3)).astype(np.float32))
+        self.pdst_host = cuda.register_host_memory(np.ones((dst_size[1],dst_size[0],3)).astype(np.float32))
         self.pdst_device = cuda.mem_alloc(self.pdst_host.nbytes)
 
         self.img_host = cuda.register_host_memory(np.ones((src_size[1],src_size[0],3)).astype(np.uint8))
@@ -147,11 +147,8 @@ class Warpaffine(object):
             self.up_information(img)
             print("1111")
         
-        
         t1 = time.time()
-
         np.copyto(self.img_host,img.data)
-
         t2 = time.time()
         cuda.memcpy_htod_async(self.img_device, self.img_host, self.stream)
         self.func(self.img_device,cuda.In(self.src_info),self.pdst_device,cuda.In(self.dst_info),\
@@ -171,17 +168,9 @@ class Warpaffine(object):
 if __name__ == "__main__":
 
     img =cv2.imread("dog1.jpg")
-    warpaffine1 = Warpaffine(dst_size=(640,640))
-    print(img.shape)
-    for _ in range(10000):
-        # img =cv2.imread("cat1.png")
-        # pdst_img = warpaffine1.preprocess(img)
-        # img =cv2.imread("dog1.jpg")
-        
+    warpaffine1 = Warpaffine(dst_size=(640,384))
+    for _ in range(1000):
         pdst_img = warpaffine1.preprocess(img)
-        # time.sleep(0.001)
-        # pdst_img = warpaffine(img,(640,640))
-    # print(pdst_img[:,0,0])
-    # img =cv2.imwrite("my.jpg",pdst_img*255)
+    cv2.imwrite("my.jpg",pdst_img*255)
 
 
