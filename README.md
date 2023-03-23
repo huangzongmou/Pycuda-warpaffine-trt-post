@@ -3,7 +3,7 @@
 使用pycuda对yolo前后处理进gpu加速。
 
 ### 使用例子
-    inference = TRT_inference("./weights/maks768x1280.onnx")
+    inference = TRT_inference("./weights/yolov5s.onnx")
     img = cv2.imread("dog1.jpg")
     boxs = inference(img)
     for box in boxs:

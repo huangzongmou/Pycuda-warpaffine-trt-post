@@ -157,10 +157,6 @@ class Warpaffine(object):
         if operator.eq(self.src_size,(img.shape[1],img.shape[0])) is False:
             self.up_information(img)
 
-        # ctx = make_default_context()
-        # print(ctx.get_device())
-        # ctx.pop()
-
         np.copyto(self.img_host,img.data)
         cuda.memcpy_htod_async(self.img_device, self.img_host, self.stream)
         self.func(self.img_device,cuda.In(self.src_info),self.pdst_device,cuda.In(self.dst_info),\
@@ -168,7 +164,6 @@ class Warpaffine(object):
         # cuda.memcpy_dtoh_async(self.pdst_host, self.pdst_device, self.stream)
         # self.stream.synchronize()
         
-
         return self.pdst_device,self.affine
 
     def __call__(self, img):

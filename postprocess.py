@@ -44,7 +44,7 @@ class gpu_decode(object):
         # self.predict_host = cuda.register_host_memory(np.ones((1,self.rows,self.cols)).astype(np.float32))
         # self.predict_device = cuda.mem_alloc(self.predict_host.nbytes)
 
-        self.output_host = cuda.register_host_memory(np.ones((self.max_objects, self.NUM_BOX_ELEMENT)).astype(np.float32))
+        self.output_host = cuda.pagelocked_empty_like(np.ones((self.max_objects, self.NUM_BOX_ELEMENT)).astype(np.float32))
         self.output_device_nbytes = self.output_host.nbytes
         self.output_device = cuda.mem_alloc(self.output_device_nbytes)
         self.max_objects = cuda.In(np.array([self.max_objects]).astype(np.int32))
