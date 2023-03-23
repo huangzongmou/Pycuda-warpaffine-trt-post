@@ -14,7 +14,7 @@ from warpaffine import Warpaffine
 
 
 class gpu_decode(object):
-    def __init__(self, rows, cols, confidence_threshold = 0.3,nms_threshold = 0.45,stream=None):
+    def __init__(self, rows, cols, confidence_threshold = 0.6,nms_threshold = 0.45,stream=None):
         super(gpu_decode, self).__init__()
         self.rows = rows
         self.cols = cols
@@ -45,7 +45,8 @@ class gpu_decode(object):
         # self.predict_device = cuda.mem_alloc(self.predict_host.nbytes)
 
         self.output_host = cuda.register_host_memory(np.ones((self.max_objects, self.NUM_BOX_ELEMENT)).astype(np.float32))
-        self.output_device = cuda.mem_alloc(self.output_host.nbytes)
+        self.output_device_nbytes = self.output_host.nbytes
+        self.output_device = cuda.mem_alloc(self.output_device_nbytes)
         self.max_objects = cuda.In(np.array([self.max_objects]).astype(np.int32))
         self.NUM_BOX_ELEMENT = cuda.In(np.array([self.NUM_BOX_ELEMENT]).astype(np.int32))
 
@@ -192,9 +193,10 @@ class gpu_decode(object):
         self.fast_nms_kernel(self.output_device,self.filter_boxs,self.max_objects,self.nms_threshold,self.NUM_BOX_ELEMENT,stream=self.stream,block=self.block,grid=self.grid)
         cuda.memcpy_dtoh_async(self.output_host, self.output_device, self.stream)
         self.stream.synchronize()
+        
+        cuda.memset_d8(self.output_device, 0, self.output_device_nbytes)  #清空
+        cuda.memset_d8(self.filter_boxs, 0, sizeof(int32)) #清空计数
 
-        # print(self.output_host[:32,:])
-        # return self.output_host
         return self.output_host[self.output_host[:,6]>0]
 
     def __call__(self, predict, affine):

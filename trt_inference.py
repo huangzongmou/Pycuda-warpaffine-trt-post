@@ -4,10 +4,7 @@ from warpaffine import Warpaffine
 from postprocess import gpu_decode
 # import pycuda.autoinit  #负责数据初始化，内存管理，销毁等
 import pycuda.driver as cuda  #GPU CPU之间的数据传输
-
 import time
-import copy
-import pdb
 import os
 
 class TRT_inference(object):
@@ -19,7 +16,7 @@ class TRT_inference(object):
         network = builder.create_network(1 <<int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 20) # 1 MiB
-        config.set_flag(trt.BuilderFlag.FP16)
+        # config.set_flag(trt.BuilderFlag.FP16)
 
         engine_path = model_path.replace("onnx","engine")
         if os.path.isfile(engine_path):
@@ -40,9 +37,7 @@ class TRT_inference(object):
         self.context = engine.create_execution_context()
 
         dst_size = self.context.get_binding_shape(engine["images"])[2:][::-1]   #(w,h)
-
         rows,cols = self.context.get_binding_shape(engine["output"])[1:]
-
         self.d_output = cuda.mem_alloc(trt.volume(self.context.get_binding_shape(engine["output"]))*4)
 
         self.stream = cuda.Stream()
@@ -57,8 +52,8 @@ class TRT_inference(object):
 
 if __name__ == "__main__":
 
-    inference = TRT_inference("./weights/maks768x1280.onnx")
-    img = cv2.imread("dog1.jpg")
+    inference = TRT_inference("./weights/yolov5s.onnx")
+    img = cv2.imread("bus.jpg")
     for _ in range(10):
         boxs = inference(img)
 
@@ -67,7 +62,7 @@ if __name__ == "__main__":
         boxs = inference(img)
     t2 = time.time()
     print(t2-t1)
-    # print(boxs)
+    print(boxs)
     for box in boxs:
         cv2.rectangle(img,(box[0],box[1]),(box[2],box[3]),(255,0,0),2)
     cv2.imwrite("test.jpg",img)
