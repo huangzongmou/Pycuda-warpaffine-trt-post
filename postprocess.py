@@ -50,7 +50,7 @@ class gpu_decode(object):
         self.max_objects = cuda.In(np.array([self.max_objects]).astype(np.int32))
         self.NUM_BOX_ELEMENT = cuda.In(np.array([self.NUM_BOX_ELEMENT]).astype(np.int32))
 
-        self.filter_boxs = cuda.InOut(np.array([0]).astype(np.int32))  #获取第一次过滤后的box数量
+        self.filter_boxs = np.array([0]).astype(np.uint32)  #获取第一次过滤后的box数量
 
         self.decode_kernel,self.fast_nms_kernel = self.cuda_func()
 
@@ -172,9 +172,9 @@ class gpu_decode(object):
     def decode_kernel_invoker(self,predict, affine):
         
         # np.copyto(self.predict_host,predict[0].data)
-
         # cuda.memcpy_htod_async(self.predict_device, self.predict_host, self.stream)
 
+        self.filter_boxs[0]=0
         self.decode_kernel(predict,\
             self.num_bboxes,\
             self.num_classes,\
@@ -182,21 +182,23 @@ class gpu_decode(object):
             cuda.In(affine),\
             self.output_device,\
             self.max_objects,\
-            self.filter_boxs,\
+            cuda.InOut(self.filter_boxs),\
             self.NUM_BOX_ELEMENT,\
             stream=self.stream,block=self.block,grid=self.grid)
 
-        # self.stream.synchronize()
-        # cuda.memcpy_dtoh_async(self.output_host, self.output_device, self.stream)
-        # print(len(self.output_host[self.output_host[:,6]>0]))
-        # print("111111111")
-        self.fast_nms_kernel(self.output_device,self.filter_boxs,self.max_objects,self.nms_threshold,self.NUM_BOX_ELEMENT,stream=self.stream,block=self.block,grid=self.grid)
+        self.fast_nms_kernel(self.output_device,\
+            cuda.In(self.filter_boxs),\
+            self.max_objects,\
+            self.nms_threshold,\
+            self.NUM_BOX_ELEMENT,\
+            stream=self.stream,\
+            block=self.block,\
+            grid=self.grid)
         cuda.memcpy_dtoh_async(self.output_host, self.output_device, self.stream)
         self.stream.synchronize()
         
         cuda.memset_d8(self.output_device, 0, self.output_device_nbytes)  #清空
-        cuda.memset_d8(self.filter_boxs, 0, sizeof(int32)) #清空计数
-
+        
         return self.output_host[self.output_host[:,6]>0]
 
     def __call__(self, predict, affine):
