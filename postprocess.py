@@ -14,11 +14,11 @@ from warpaffine import Warpaffine
 
 
 class gpu_decode(object):
-    def __init__(self, rows, cols, confidence_threshold = 0.6,nms_threshold = 0.45,stream=None):
+    def __init__(self, rows, cols, confidence_threshold = 0.6,nms_threshold = 0.45,model="yolov5",stream=None):
         super(gpu_decode, self).__init__()
         self.rows = rows
         self.cols = cols
-
+        self.model = model
         self.block = 512 if rows > 512 else rows
         self.grid = (rows + self.block - 1) // self.block
         self.block = (self.block,1,1)
@@ -27,7 +27,11 @@ class gpu_decode(object):
         self.max_objects = 1000
         self.NUM_BOX_ELEMENT = 7
         self.num_bboxes = cuda.In(np.array([rows]).astype(np.int32))
-        self.num_classes = cuda.In(np.array([cols-5]).astype(np.int32))
+        if self.model == "yolov5":
+            self.num_classes = cuda.In(np.array([cols-5]).astype(np.int32))
+        elif self.model == "yolov8":
+            self.num_classes = cuda.In(np.array([cols-4]).astype(np.int32))
+
         self.confidence_threshold = cuda.In(np.array([confidence_threshold]).astype(np.float32))
         self.nms_threshold = cuda.In(np.array([nms_threshold]).astype(np.float32))
 
@@ -61,7 +65,7 @@ class gpu_decode(object):
         *oy = matrix[3] * x + matrix[4] * y + matrix[5];
         }
 
-        __global__ void decode_kernel(
+        __global__ void decode_kernelv5(
             float* predict, int* num_bboxes, int* num_classes, float* confidence_threshold, 
             float* invert_affine_matrix, float* parray, int* max_objects, int* filter_boxs, int* NUM_BOX_ELEMENT
         )
@@ -85,6 +89,56 @@ class gpu_decode(object):
             }
 
             confidence *= objectness;
+            if(confidence < *confidence_threshold)
+                return;
+
+            int index = atomicAdd(filter_boxs, 1);
+            if(index >= *max_objects)
+                return;
+
+            float cx         = *pitem++;
+            float cy         = *pitem++;
+            float width      = *pitem++;
+            float height     = *pitem++;
+            float left   = cx - width * 0.5f;
+            float top    = cy - height * 0.5f;
+            float right  = cx + width * 0.5f;
+            float bottom = cy + height * 0.5f;
+
+            affine_project(invert_affine_matrix, left,  top,    &left,  &top);
+            affine_project(invert_affine_matrix, right, bottom, &right, &bottom);
+            // left, top, right, bottom, confidence, class, keepflag
+            float* pout_item = parray + index * (*NUM_BOX_ELEMENT);
+            *pout_item++ = left;
+            *pout_item++ = top;
+            *pout_item++ = right;
+            *pout_item++ = bottom;
+            *pout_item++ = confidence;
+            *pout_item++ = label;
+            *pout_item++ = 1; // 1 = keep, 0 = ignore
+        }
+
+        __global__ void decode_kernelv8(
+            float* predict, int* num_bboxes, int* num_classes, float* confidence_threshold, 
+            float* invert_affine_matrix, float* parray, int* max_objects, int* filter_boxs, int* NUM_BOX_ELEMENT
+        )
+        {  
+            int position = blockDim.x * blockIdx.x + threadIdx.x;
+            if (position >= *num_bboxes) return;
+
+            float* pitem     = predict + (4 + *num_classes) * position;
+     
+
+            float* class_confidence = pitem + 4;
+            float confidence        = *class_confidence++;
+            int label               = 0;
+            for(int i = 1; i < *num_classes; ++i, ++class_confidence){
+                if(*class_confidence > confidence){
+                    confidence = *class_confidence;
+                    label      = i;
+                }
+            }
+
             if(confidence < *confidence_threshold)
                 return;
 
@@ -166,7 +220,12 @@ class gpu_decode(object):
         } 
 
         """)
-        return mod.get_function("decode_kernel"),mod.get_function("fast_nms_kernel")
+        if self.model == "yolov5":
+            decode_kernel = mod.get_function("decode_kernelv5")
+        elif self.model == "yolov8":
+            decode_kernel = mod.get_function("decode_kernelv8")
+
+        return decode_kernel,mod.get_function("fast_nms_kernel")
     
 
     def decode_kernel_invoker(self,predict, affine):
