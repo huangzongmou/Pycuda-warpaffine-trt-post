@@ -1,4 +1,3 @@
-[toc]
 ___
 # 基于pycuda的yolo前后处理
 
