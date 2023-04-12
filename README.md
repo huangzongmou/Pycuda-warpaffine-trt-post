@@ -1,7 +1,7 @@
 # 基于pycuda的yolo前后处理
 
-    1、使用pycuda对yolo前后处理进gpu加速。前处理包含操作：缩放、补变、bgr->rgb,转换维度（1,640,640,3）->（1,3,640,640）,除255.后处理支持yolov5、yolov8.
-    2、yolov8模型需要./tool/add_transpose_node.py 将官方onnx模型输出进行转换和重命名，方便后处理。
+    1、使用pycuda对yolo前后处理进gpu加速。前处理包含操作：缩放、补边、bgr->rgb,转换维度（1,640,640,3）->（1,3,640,640）,除255.后处理支持yolov5、yolov8.
+    2、yolov8模型需要./tool/add_transpose_node.py 将官方onnx模型输出进行转换和重命名，方便处理。
 
 
 
